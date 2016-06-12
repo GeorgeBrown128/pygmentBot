@@ -6,12 +6,39 @@ import datetime
 import logging
 import configparser
 import time
+from subprocess import run
 
 bot = ""
 token = ""
 use_whitelist = True
 whitelist = []
 botusername = ""
+
+latex_header = \
+"""\\documentclass[a4paper]{article}
+\\pagenumbering{gobble}
+\\usepackage[european, cuteinductors]{circuitikz}
+\\usepackage{siunitx}
+\\usepackage{booktabs}
+\\usepackage{amsmath, amssymb}
+\\begin{document}
+"""
+
+latex_footer = \
+"""
+\\end{document}"""
+
+def render_latex(body, chat_id):
+    global bot
+    print("latex: " + latex_header + body + latex_footer)
+    work = open('temptex', 'w')
+    work.write(latex_header + body + latex_footer)
+    work.close()
+    bot.sendChatAction(chat_id, 'upload_photo')
+    run(["latex", "-interaction=batchmode", "temptex"], shell=False)
+    run(["convert", "-density", "300", "-trim", "temptex.dvi", "-bordercolor", "white", "-border", "10x10", "output.png"])
+    image = open("output.png", 'rb')
+    bot.sendPhoto(chat_id, image)
 
 def handle_message(msg):
     global botusername
@@ -35,7 +62,7 @@ def handle_message(msg):
     logging.info("Received command %s", command)
 
     chat_id = msg['chat']['id']
-
+    bot.sendChatAction(chat_id, 'typing')
     if(command == '/start'):
         bot.sendMessage(chat_id,
             "Hi there! I see you're new. Type /help to get started!"
@@ -48,8 +75,8 @@ def handle_message(msg):
             '    /latex <latex body> - render latex as a standalone\n'
             )
 
-#    elif(command == '/latex'):
-#        render_latex(msg['text'])
+    elif(command == '/latex'):
+        render_latex(msg['text'].split(' ', 1)[1], chat_id)
 
     elif(command in ('/beep', 'Beep')):
         bot.sendMessage(chat_id, 'Boop!')
@@ -95,8 +122,10 @@ def logging_init():
     logfilename = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S-bot.log")
     logging.basicConfig(
         format="%(asctime)s:%(levelname)s: %(message)s",
-        level=logging.INFO
+        level=logging.INFO,
+        filename = logfilename
     )
+    logging.getLogger().addHandler(logging.StreamHandler())
     logging.info("Logging to %s", logfilename)
 
 def parse_config():
